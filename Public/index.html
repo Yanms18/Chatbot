@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Chatbot Ordering App</title>
+  <style>
+    body { font-family: Arial, sans-serif; }
+    #messages { border: 1px solid #ccc; padding: 10px; height: 300px; overflow-y: scroll; }
+    input { width: 80%; }
+  </style>
+</head>
+<body>
+  <h1>Chatbot Ordering App</h1>
+  <div id="messages"></div>
+  <input id="msgInput" type="text" placeholder="Enter your message..." autofocus />
+  <button id="sendBtn">Send</button>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+
+    const messagesDiv = document.getElementById('messages');
+    const msgInput = document.getElementById('msgInput');
+    const sendBtn = document.getElementById('sendBtn');
+
+    socket.on('message', (msg) => {
+      const p = document.createElement('p');
+      p.innerText = msg;
+      messagesDiv.appendChild(p);
+    });
+
+    sendBtn.addEventListener('click', () => {
+      const msg = msgInput.value;
+      socket.send(msg);
+      msgInput.value = '';
+    });
+
+    msgInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') sendBtn.click();
+    });
+  </script>
+</body>
+</html>
