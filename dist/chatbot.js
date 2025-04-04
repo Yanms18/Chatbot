@@ -35,38 +35,12 @@ class ChatBot {
         // Listen for messages from the client.
         this.socket.on('message', (msg) => __awaiter(this, void 0, void 0, function* () {
             const trimmed = msg.trim();
-            // If we are in ordering mode, numeric input is interpreted as item selection
-            if (this.orderingMode) {
-                const index = Number(trimmed) - 1;
-                const menuItems = this.orderController.getMenu();
-                if (!isNaN(index) && index >= 0 && index < menuItems.length) {
-                    const selectedItem = menuItems[index];
-                    this.currentOrder.push(selectedItem);
-                    this.sendMessage(`${selectedItem.name} added to your order.`);
-                    // Prompt to add more or checkout
-                    this.sendMessage(`Enter another item number to add more items, or type 99 to checkout.`);
-                }
-                else {
-                    this.sendMessage('Invalid item selection. Please try again.');
-                }
-            }
-            else {
-                // Not in ordering mode: handle options 1, 99, 98, 97, 0, or payment amount input.
+            // First, if the trimmed message is one of the global commands, process it regardless of ordering mode.
+            if (['99', '98', '97', '0'].includes(trimmed)) {
+                // Clear ordering mode when a global command is received.
+                this.orderingMode = false;
                 switch (trimmed) {
-                    case '1':
-                        // Requirement 4: Return the restaurant menu.
-                        const items = this.orderController.getMenu();
-                        let message = 'Select items by number:\n';
-                        items.forEach((item, index) => {
-                            message += `${index + 1}: ${item.name} - ${item.description}\n`;
-                        });
-                        this.sendMessage(message);
-                        // Set ordering mode so subsequent numeric input selects items.
-                        this.orderingMode = true;
-                        break;
                     case '99':
-                        // Requirement 5: Checkout order.
-                        this.orderingMode = false;
                         if (this.currentOrder.length > 0) {
                             yield this.checkoutOrder();
                         }
@@ -75,12 +49,12 @@ class ChatBot {
                         }
                         break;
                     case '98':
-                        // Requirement 6: Return order history.
+                        // Return order history
                         const history = this.orderController.getOrderHistory();
                         this.sendMessage(`Order History: ${JSON.stringify(history)}`);
                         break;
                     case '97':
-                        // Requirement 7: Return current order.
+                        // Return current order
                         if (this.currentOrder.length > 0) {
                             this.sendMessage(`Current Order: ${JSON.stringify(this.currentOrder)}`);
                         }
@@ -89,7 +63,7 @@ class ChatBot {
                         }
                         break;
                     case '0':
-                        // Requirement 8: Cancel order.
+                        // Cancel the current order.
                         if (this.currentOrder.length > 0) {
                             this.currentOrder = [];
                             this.sendMessage("Order has been canceled.");
@@ -98,11 +72,42 @@ class ChatBot {
                             this.sendMessage("No order to cancel.");
                         }
                         break;
+                }
+            }
+            // If not a global command, then process based on whether we are in ordering mode.
+            else if (this.orderingMode) {
+                // Interpret numeric input as item selection.
+                const index = Number(trimmed) - 1;
+                const menuItems = this.orderController.getMenu();
+                if (!isNaN(index) && index >= 0 && index < menuItems.length) {
+                    const selectedItem = menuItems[index];
+                    this.currentOrder.push(selectedItem);
+                    this.sendMessage(`${selectedItem.name} added to your order.`);
+                    // Prompt to add more items or checkout.
+                    this.sendMessage(`Enter another item number to add more items, or type 99 to checkout.`);
+                }
+                else {
+                    this.sendMessage('Invalid item selection. Please try again.');
+                }
+            }
+            else {
+                // Not in ordering mode, handle starting order or payment amount.
+                switch (trimmed) {
+                    case '1':
+                        // Start ordering: list menu items.
+                        const items = this.orderController.getMenu();
+                        let message = 'Select items by number:\n';
+                        items.forEach((item, index) => {
+                            message += `${index + 1}: ${item.name} - ${item.description}\n`;
+                        });
+                        this.sendMessage(message);
+                        // Set ordering mode so subsequent numeric inputs select items.
+                        this.orderingMode = true;
+                        break;
                     default:
-                        // If numeric input outside ordering mode, assume it is payment amount.
+                        // If numeric input outside ordering mode, assume it is a payment amount.
                         if (!isNaN(Number(trimmed))) {
                             const paymentAmount = Number(trimmed);
-                            // Requirement 9-11: Process payment using Paystack test account.
                             yield (0, paymentController_1.handlePayment)(this.socket, paymentAmount);
                         }
                         else {
