@@ -13,45 +13,74 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PaymentService = void 0;
-exports.processPayment = processPayment;
 const axios_1 = __importDefault(require("axios"));
+const dotenv_1 = __importDefault(require("dotenv"));
+dotenv_1.default.config();
 class PaymentService {
     constructor() {
         this.paystackUrl = 'https://api.paystack.co';
         this.secretKey = process.env.PAYSTACK_SECRET_KEY || '';
     }
-    initiatePayment(amount, email) {
+    /**
+     * Initiates a payment with Paystack.
+     * @param amount Amount to be paid (in kobo, so multiply by 100 for NGN).
+     * @param email Customer's email address.
+     * @returns Payment initialization response, including the authorization URL.
+     */
+    initiatePayment(amount, email, reference) {
         return __awaiter(this, void 0, void 0, function* () {
-            const response = yield axios_1.default.post(`${this.paystackUrl}/transaction/initialize`, {
-                email,
-                amount,
-            }, {
-                headers: {
-                    Authorization: `Bearer ${this.secretKey}`,
-                    'Content-Type': 'application/json',
-                },
-            });
-            return response.data;
+            try {
+                const response = yield axios_1.default.post(`${this.paystackUrl}/transaction/initialize`, {
+                    email,
+                    amount: amount * 100,
+                    reference,
+                    callback_url: `http://localhost:3000/payment/callback`
+                }, {
+                    headers: {
+                        Authorization: `Bearer ${this.secretKey}`,
+                        'Content-Type': 'application/json',
+                    },
+                });
+                return response.data.data.authorization_url;
+            }
+            catch (error) {
+                if (error instanceof Error) {
+                    console.error('Error initiating payment:', error.message);
+                    throw new Error('Failed to initiate payment. Please try again.');
+                }
+                else {
+                    console.error('Unknown error initiating payment:', error);
+                    throw new Error('An unknown error occurred while initiating payment.');
+                }
+            }
         });
     }
+    /**
+     * Verifies a payment with Paystack.
+     * @param reference Payment reference returned by Paystack.
+     * @returns Payment verification response.
+     */
     confirmPayment(reference) {
         return __awaiter(this, void 0, void 0, function* () {
-            const response = yield axios_1.default.get(`${this.paystackUrl}/transaction/verify/${reference}`, {
-                headers: {
-                    Authorization: `Bearer ${this.secretKey}`,
-                },
-            });
-            return response.data;
+            try {
+                const response = yield axios_1.default.get(`${this.paystackUrl}/transaction/verify/${reference}`, {
+                    headers: {
+                        Authorization: `Bearer ${this.secretKey}`,
+                    },
+                });
+                return response.data.data.status === 'success'; // Return true if payment was successful
+            }
+            catch (error) {
+                if (error instanceof Error) {
+                    console.error('Error verifying payment:', error.message);
+                    throw new Error('Failed to verify payment. Please try again.');
+                }
+                else {
+                    console.error('Unknown error verifying payment:', error);
+                    throw new Error('An unknown error occurred while verifying payment.');
+                }
+            }
         });
     }
 }
 exports.PaymentService = PaymentService;
-function processPayment(amount, userId) {
-    return __awaiter(this, void 0, void 0, function* () {
-        // In a production app, call Paystack API using your test account credentials.
-        // Here we simulate a successful payment.
-        return new Promise((resolve) => {
-            setTimeout(() => resolve(true), 1000);
-        });
-    });
-}

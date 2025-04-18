@@ -8,127 +8,133 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
-const orderController_1 = require("./controllers/orderController");
-const orderController_2 = __importDefault(require("./controllers/orderController"));
-const paymentController_1 = require("./controllers/paymentController");
+const orderService_1 = require("./services/orderService");
+const paymentService_1 = require("./services/paymentService");
 const sessionService_1 = require("./services/sessionService");
+const itemList_1 = require("./utils/itemList");
+const orderReferences_1 = require("./utils/orderReferences");
 class ChatBot {
     constructor(socket) {
-        this.currentOrder = [];
-        // Flag to determine if we're in item selection mode (after “1”)
         this.orderingMode = false;
         this.socket = socket;
-        this.orderController = new orderController_2.default();
-        this.paymentController = new paymentController_1.PaymentController();
+        this.orderService = new orderService_1.OrderService();
         this.sessionService = new sessionService_1.SessionService();
-        // Create a session id (can be used with device id if needed)
-        this.sessionId = this.sessionService.createSession();
+        this.sessionId = this.sessionService.createSession(socket.id);
         this.initialize();
     }
     initialize() {
-        // Send initial options on connection.
-        (0, orderController_1.sendInitialOptions)(this.socket);
-        // Listen for messages from the client.
+        this.sendInitialOptions();
         this.socket.on('message', (msg) => __awaiter(this, void 0, void 0, function* () {
             const trimmed = msg.trim();
-            // First, if the trimmed message is one of the global commands, process it regardless of ordering mode.
-            if (['99', '98', '97', '0'].includes(trimmed)) {
-                // Clear ordering mode when a global command is received.
-                this.orderingMode = false;
-                switch (trimmed) {
-                    case '99':
-                        if (this.currentOrder.length > 0) {
-                            yield this.checkoutOrder();
-                        }
-                        else {
-                            this.sendMessage("No order to place.");
-                        }
-                        break;
-                    case '98':
-                        // Return order history
-                        const history = this.orderController.getOrderHistory();
-                        this.sendMessage(`Order History: ${JSON.stringify(history)}`);
-                        break;
-                    case '97':
-                        // Return current order
-                        if (this.currentOrder.length > 0) {
-                            this.sendMessage(`Current Order: ${JSON.stringify(this.currentOrder)}`);
-                        }
-                        else {
-                            this.sendMessage("No current order.");
-                        }
-                        break;
-                    case '0':
-                        // Cancel the current order.
-                        if (this.currentOrder.length > 0) {
-                            this.currentOrder = [];
-                            this.sendMessage("Order has been canceled.");
-                        }
-                        else {
-                            this.sendMessage("No order to cancel.");
-                        }
-                        break;
-                }
-            }
-            // If not a global command, then process based on whether we are in ordering mode.
-            else if (this.orderingMode) {
-                // Interpret numeric input as item selection.
+            if (this.orderingMode && !['99', '98', '97', '0'].includes(trimmed)) {
+                // Handle item selection
                 const index = Number(trimmed) - 1;
-                const menuItems = this.orderController.getMenu();
+                const menuItems = (0, itemList_1.getItemList)();
                 if (!isNaN(index) && index >= 0 && index < menuItems.length) {
                     const selectedItem = menuItems[index];
-                    this.currentOrder.push(selectedItem);
-                    this.sendMessage(`${selectedItem.name} added to your order.`);
-                    // Prompt to add more items or checkout.
-                    this.sendMessage(`Enter another item number to add more items, or type 99 to checkout.`);
+                    this.orderService.addItemToOrder(selectedItem);
+                    this.sendMessage(`${selectedItem.name} added to your order. Type another number to add more, or 99 to checkout.`);
                 }
                 else {
                     this.sendMessage('Invalid item selection. Please try again.');
                 }
+                return;
             }
-            else {
-                // Not in ordering mode, handle starting order or payment amount.
-                switch (trimmed) {
-                    case '1':
-                        // Start ordering: list menu items.
-                        const items = this.orderController.getMenu();
-                        let message = 'Select items by number:\n';
-                        items.forEach((item, index) => {
-                            message += `${index + 1}: ${item.name} - ${item.description}\n`;
+            switch (trimmed) {
+                case '1':
+                    // Show menu and enter ordering mode
+                    this.orderingMode = true;
+                    const items = (0, itemList_1.getItemList)();
+                    let menu = 'Select items by number:\n';
+                    items.forEach((item, idx) => {
+                        menu += `${idx + 1}: ${item.name} - ${item.description} (${item.price} Naira)\n`;
+                    });
+                    this.sendMessage(menu);
+                    break;
+                case '99':
+                    // Checkout order
+                    if (this.orderService.getCurrentOrder().length > 0) {
+                        const total = this.orderService.getCurrentOrder().reduce((sum, item) => sum + item.price, 0);
+                        this.sendMessage(`Order placed! Total: ${total} Naira. Please type "pay" to proceed with payment.`);
+                        this.orderService.placeOrder();
+                        this.orderingMode = false;
+                    }
+                    else {
+                        this.sendMessage('No order to place.');
+                        this.sendInitialOptions();
+                    }
+                    break;
+                case '98':
+                    // Show order history
+                    const history = this.orderService.getOrderHistory();
+                    if (history.length === 0) {
+                        this.sendMessage('No order history.');
+                    }
+                    else {
+                        let histMsg = 'Order History:\n';
+                        history.forEach((order, idx) => {
+                            const items = order.map(i => i.name).join(', ');
+                            histMsg += `Order ${idx + 1}: ${items}\n`;
                         });
-                        this.sendMessage(message);
-                        // Set ordering mode so subsequent numeric inputs select items.
-                        this.orderingMode = true;
+                        this.sendMessage(histMsg);
+                    }
+                    break;
+                case '97':
+                    // Show current order
+                    const current = this.orderService.getCurrentOrder();
+                    if (current.length === 0) {
+                        this.sendMessage('No current order.');
+                    }
+                    else {
+                        const items = current.map(i => `${i.name} (${i.price} Naira)`).join(', ');
+                        const total = current.reduce((sum, item) => sum + item.price, 0);
+                        this.sendMessage(`Current Order: ${items}\nTotal: ${total} Naira`);
+                    }
+                    break;
+                case '0':
+                    // Cancel order
+                    if (this.orderService.getCurrentOrder().length > 0) {
+                        this.orderService.cancelOrder();
+                        this.sendMessage('Order cancelled.');
+                    }
+                    else {
+                        this.sendMessage('No order to cancel.');
+                    }
+                    this.orderingMode = false;
+                    this.sendInitialOptions();
+                    break;
+                case 'pay':
+                    // Use the last placed order for payment
+                    const lastOrder = this.orderService.getOrderHistory().slice(-1)[0];
+                    if (!lastOrder) {
+                        this.sendMessage('No recent order to pay for.');
                         break;
-                    default:
-                        // If numeric input outside ordering mode, assume it is a payment amount.
-                        if (!isNaN(Number(trimmed))) {
-                            const paymentAmount = Number(trimmed);
-                            yield (0, paymentController_1.handlePayment)(this.socket, paymentAmount);
-                        }
-                        else {
-                            this.sendMessage("Invalid option. Please try again.");
-                            this.sendInitialOptions();
-                        }
-                }
+                    }
+                    const amount = lastOrder.reduce((sum, item) => sum + item.price, 0);
+                    const email = 'customer@example.com';
+                    const reference = 'ref_' + Math.random().toString(36).substring(2, 12);
+                    orderReferences_1.orderReferences.set(reference, { items: lastOrder, amount });
+                    try {
+                        const paymentService = new paymentService_1.PaymentService();
+                        const paymentUrl = yield paymentService.initiatePayment(amount, email, reference);
+                        this.sendMessage(`Redirecting to payment...`);
+                        this.socket.emit('redirect', paymentUrl); // Client should handle this event to redirect
+                    }
+                    catch (_a) {
+                        this.sendMessage('Failed to initiate payment. Please try again.');
+                    }
+                    break;
+                case 'done':
+                    // Simulate payment confirmation
+                    this.sendMessage('Payment successful! Thank you for your order.');
+                    this.sendInitialOptions();
+                    break;
+                default:
+                    this.sendMessage('Invalid selection. Please try again.');
+                    this.sendInitialOptions();
             }
         }));
-    }
-    checkoutOrder() {
-        return __awaiter(this, void 0, void 0, function* () {
-            // Requirement 5: On checkout, process payment if order exists.
-            // For simulation, we set fixed total or you may compute a total from currentOrder.
-            const orderAmount = 100; // Replace with computed total if needed.
-            yield (0, paymentController_1.handlePayment)(this.socket, orderAmount);
-            this.sendMessage("Order placed. Please complete payment.");
-            // After payment, assume payment is successful and notify user.
-            // Payment integration (via PaymentController) notifies using handlePayment.
-            this.currentOrder = [];
-        });
     }
     sendInitialOptions() {
         const options = `Welcome!
@@ -140,7 +146,6 @@ Select 0 to cancel order`;
         this.sendMessage(options);
     }
     sendMessage(message) {
-        // Send a message via the socket.
         this.socket.emit('message', message);
     }
 }

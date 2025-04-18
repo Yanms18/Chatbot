@@ -4,40 +4,176 @@
   <meta charset="UTF-8">
   <title>Chatbot Ordering App</title>
   <style>
-    body { font-family: Arial, sans-serif; }
-    #messages { border: 1px solid #ccc; padding: 10px; height: 300px; overflow-y: scroll; }
-    input { width: 80%; }
+  body {
+    background: linear-gradient(135deg, #1976d2 0%, #2196f3 100%);
+    font-family: 'Segoe UI', Arial, sans-serif;
+    margin: 0;
+    min-height: 100vh;
+    height: 100vh;
+    overflow: hidden; /* Prevent window scrolling */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+  }
+  .chat-container {
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(25, 118, 210, 0.15), 0 1.5px 4px rgba(33, 150, 243, 0.10);
+    margin-top: 48px;
+    width: 100%;
+    max-width: 420px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    max-height: 90vh; /* Prevent container from exceeding viewport */
+    height: 90vh;
+  }
+  .chat-header {
+    background: #1976d2;
+    color: #fff;
+    padding: 20px 24px;
+    font-size: 1.5em;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  #messages {
+    background: #f4f8fb;
+    border: none;
+    padding: 18px 16px 12px 16px;
+    flex: 1 1 auto;
+    font-size: 1.08em;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    overflow-y: auto; /* Only this area scrolls */
+    min-height: 0;
+    max-height: 100%;
+  }
+  #messages p {
+    margin: 0;
+    padding: 10px 14px;
+    border-radius: 12px;
+    max-width: 80%;
+    word-break: break-word;
+    background: #e3f2fd;
+    color: #1976d2;
+    align-self: flex-start;
+    box-shadow: 0 1px 2px rgba(25, 118, 210, 0.05);
+    font-size: 1em;
+    transition: background 0.2s;
+  }
+  #messages p.user {
+    background: #1976d2;
+    color: #fff;
+    align-self: flex-end;
+  }
+  .chat-input-row {
+    display: flex;
+    border-top: 1px solid #e3eaf2;
+    background: #f4f8fb;
+    padding: 12px 12px;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  #msgInput {
+    flex: 1;
+    padding: 10px 14px;
+    border: 1px solid #b3c6e0;
+    border-radius: 8px;
+    font-size: 1em;
+    outline: none;
+    transition: border 0.2s;
+  }
+  #msgInput:focus {
+    border-color: #1976d2;
+  }
+  #sendBtn {
+    background: linear-gradient(90deg, #1976d2 60%, #2196f3 100%);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 0 22px;
+    font-size: 1em;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s, box-shadow 0.2s;
+    box-shadow: 0 2px 8px rgba(25, 118, 210, 0.08);
+  }
+  #sendBtn:hover {
+    background: linear-gradient(90deg, #1565c0 60%, #1976d2 100%);
+  }
+  @media (max-width: 500px) {
+    .chat-container {
+      margin-top: 0;
+      border-radius: 0;
+      max-width: 100vw;
+      min-height: 100vh;
+      height: 100vh;
+    }
+    .chat-header {
+      font-size: 1.2em;
+      padding: 14px 8px;
+    }
+    #messages {
+      padding: 10px 6px 8px 6px;
+    }
+    .chat-input-row {
+      padding: 8px 4px;
+    }
+  }
   </style>
 </head>
 <body>
-  <h1>Chatbot Ordering App</h1>
-  <div id="messages"></div>
-  <input id="msgInput" type="text" placeholder="Enter your message..." autofocus />
-  <button id="sendBtn">Send</button>
-
+  <div class="chat-container">
+    <div class="chat-header">Chatbot Ordering App</div>
+    <div id="messages"></div>
+    <div class="chat-input-row">
+      <input id="msgInput" type="text" placeholder="Enter your message..." autofocus />
+      <button id="sendBtn">Send</button>
+    </div>
+  </div>
   <script src="/socket.io/socket.io.js"></script>
   <script>
-    const socket = io();
+  const socket = io();
 
-    const messagesDiv = document.getElementById('messages');
-    const msgInput = document.getElementById('msgInput');
-    const sendBtn = document.getElementById('sendBtn');
+  const messagesDiv = document.getElementById('messages');
+  const msgInput = document.getElementById('msgInput');
+  const sendBtn = document.getElementById('sendBtn');
 
-    socket.on('message', (msg) => {
-      const p = document.createElement('p');
-      p.innerText = msg;
-      messagesDiv.appendChild(p);
-    });
+  function scrollToBottom() {
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+  }
 
-    sendBtn.addEventListener('click', () => {
-      const msg = msgInput.value;
-      socket.send(msg);
-      msgInput.value = '';
-    });
+  socket.on('message', (msg) => {
+    const p = document.createElement('p');
+    p.innerText = msg;
+    messagesDiv.appendChild(p);
+    scrollToBottom(); 
+  });
 
-    msgInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') sendBtn.click();
-    });
+  socket.on('redirect', (url) => {
+    window.location.href = url;
+  });
+
+  sendBtn.addEventListener('click', () => {
+    const msg = msgInput.value;
+    if (!msg.trim()) return;
+    // Show user message in blue bubble
+    const p = document.createElement('p');
+    p.innerText = msg;
+    p.className = 'user';
+    messagesDiv.appendChild(p);
+    scrollToBottom(); // Always scroll after user message
+    socket.send(msg);
+    msgInput.value = '';
+  });
+
+  msgInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') sendBtn.click();
+  });
   </script>
 </body>
 </html>
