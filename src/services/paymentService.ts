@@ -20,13 +20,14 @@ export class PaymentService {
      */
     public async initiatePayment(amount: number, email: string, reference: string): Promise<string> {
         try {
+            const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
             const response = await axios.post(
                 `${this.paystackUrl}/transaction/initialize`,
                 {
                     email,
                     amount: amount * 100,
                     reference,
-                    callback_url: `http://localhost:3000/payment/callback`
+                    callback_url: `${baseUrl}/payment/callback`
                 },
                 {
                     headers: {
